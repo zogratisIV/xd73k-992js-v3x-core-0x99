@@ -17,7 +17,7 @@ jobs:
 
     - name: Bypass Broken Container Hooks & Setup Config
       run: |
-        # منع الـ tmpfiles الخربان جوه الـ Container من إنه يضرب الـ Job
+        # حل مشكلة الـ tmpfiles عشان الـ hooks متموتش الـ job في التحديث
         mkdir -p /etc/tmpfiles.d
         echo "d /run/initramfs 0755 root root -" > /etc/tmpfiles.d/fix.conf
         ln -sf /dev/null /usr/lib/tmpfiles.d/journal-nocow.conf
@@ -25,11 +25,11 @@ jobs:
         pacman-key --init
         pacman-key --populate archlinux
 
-        # تجهيز مسار ميرور آرتكس الرسمي
+        # إنشاء المجلدات وسحب الميرور باستخدام curl المتاح في الحاوية
         mkdir -p /etc/pacman.d
-        wget -qO /etc/pacman.d/artix-mirrorlist "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"
+        curl -sL "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist" -o /etc/pacman.d/artix-mirrorlist
 
-        # كتابة الـ Config نضيف ومباشر
+        # كتابة الـ Config النضيف
         cat << 'EOF' > /etc/pacman.conf
         [options]
         HoldPkg     = pacman glibc
@@ -61,13 +61,13 @@ jobs:
 
     - name: Install Base Requirements
       run: |
-        # التشغيل هنا مع إجبار باكمان على تخطي أخطاء الـ Hooks لو حصلت
-        pacman -Sy --noconfirm wget git base-devel sudo || true
+        # تحديث وتثبيت الأدوات الأساسية مع تجاهل الـ hook الخربان لو رمى كود خطأ
+        pacman -Sy --noconfirm git base-devel sudo || true
         pacman -Syy --noconfirm
 
     - name: Inject V3 Flags & Setup Builder User
       run: |
-        # ضبط الـ Flags للـ v3 والعنف في الـ Compiler
+        # حقن حزم الـ v3 والـ O3 للكومبايلر
         sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
         
         useradd -m builder
