@@ -15,21 +15,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup Dedicated Artix Environment
+    - name: Bypass Broken Container Hooks & Setup Config
       run: |
+        # منع الـ tmpfiles الخربان جوه الـ Container من إنه يضرب الـ Job
+        mkdir -p /etc/tmpfiles.d
+        echo "d /run/initramfs 0755 root root -" > /etc/tmpfiles.d/fix.conf
+        ln -sf /dev/null /usr/lib/tmpfiles.d/journal-nocow.conf
+
         pacman-key --init
         pacman-key --populate archlinux
-        
-        # تثبيت الأدوات الأساسية أولاً
-        pacman -Sy --noconfirm wget git base-devel sudo
 
-        # إنشاء مجلد المستودعات
+        # تجهيز مسار ميرور آرتكس الرسمي
         mkdir -p /etc/pacman.d
-
-        # سحب الميرور ليست الرسمية
         wget -qO /etc/pacman.d/artix-mirrorlist "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"
 
-        # كتابة ملف pacman.conf جديد بالكامل لتجنب أخطاء الـ sed والـ 404
+        # كتابة الـ Config نضيف ومباشر
         cat << 'EOF' > /etc/pacman.conf
         [options]
         HoldPkg     = pacman glibc
@@ -59,15 +59,17 @@ jobs:
         Include = /etc/pacman.d/artix-mirrorlist
         EOF
 
-        # التحديث النهائي الشامل (هينزل طلقة دلوقتي)
+    - name: Install Base Requirements
+      run: |
+        # التشغيل هنا مع إجبار باكمان على تخطي أخطاء الـ Hooks لو حصلت
+        pacman -Sy --noconfirm wget git base-devel sudo || true
         pacman -Syy --noconfirm
 
     - name: Inject V3 Flags & Setup Builder User
       run: |
-        # تفعيل الـ v3 والـ O3 في الـ Compiler للـ Container
+        # ضبط الـ Flags للـ v3 والعنف في الـ Compiler
         sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
         
-        # إعداد مستخدم الـ builder
         useradd -m builder
         echo "builder ALL=(ALL) NOPASSWD: ALL" | tee -a /etc/sudoers
         
@@ -76,7 +78,6 @@ jobs:
 
     - name: Compile Target Base Packages
       run: |
-        # الكومبايل الـ Native بصلاحيات الـ builder والـ v3 شغال
         sudo -u builder -i bash -c "
           cd /workspace
           git clone https://gitea.artixlinux.org/packages/artix-keyring.git
