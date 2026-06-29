@@ -1,0 +1,40 @@
+name: Ghost V3 Base Builder
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # عشان تقدر تشغله يدوي في أي وقت بالزرار
+
+jobs:
+  build-v3:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Build Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y arch-install-scripts binutils zstd
+
+    - name: Download Artix Bootstrap
+      run: |
+        mkdir -p ~/artix-chroot
+        wget https://iso.artixlinux.org/arch-bootstrap/artix-bootstrap-20240205_x86_64.tar.zst
+        sudo tar -I zstd -xf artix-bootstrap*.tar.zst -C ~/artix-chroot
+
+    - name: Inject V3 Flags & Compile Base
+      run: |
+        sudo sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' ~/artix-chroot/etc/makepkg.conf
+        sudo arch-chroot ~/artix-chroot /bin/bash -c "
+          pacman-key --init
+          pacman-key --populate artix
+          pacman -Syu --noconfirm base-devel git
+        "
+
+    - name: Upload V3 Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: artix-v3-packages
+        path: ~/artix-chroot/root/packages/
