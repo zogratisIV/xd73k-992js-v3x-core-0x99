@@ -15,36 +15,56 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Initialize Pacman & Add Artix Repos via Official Mirrorlist
+    - name: Setup Dedicated Artix Environment
       run: |
         pacman-key --init
         pacman-key --populate archlinux
         
-        # تثبيت الأدوات الأساسية
+        # تثبيت الأدوات الأساسية أولاً
         pacman -Sy --noconfirm wget git base-devel sudo
 
-        # تجهيز مسار الـ mirrorlist الخاص بآرتكس
+        # إنشاء مجلد المستودعات
         mkdir -p /etc/pacman.d
 
-        # سحب الـ mirrorlist الرسمية من مستودع أداوت آرتكس مباشرة لضمان سيرفرات شغالة 100%
+        # سحب الميرور ليست الرسمية
         wget -qO /etc/pacman.d/artix-mirrorlist "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"
 
-        # حقن المستودعات الأساسية في pacman.conf والإشارة للملف الفرعي اللي نزلناه
-        echo -e "\n[system]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
-        echo -e "\n[world]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
-        echo -e "\n[galaxy]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
+        # كتابة ملف pacman.conf جديد بالكامل لتجنب أخطاء الـ sed والـ 404
+        cat << 'EOF' > /etc/pacman.conf
+        [options]
+        HoldPkg     = pacman glibc
+        Architecture = auto
+        Color
+        CheckSpace
+        ParallelDownloads = 5
+        SigLevel    = Required DatabaseOptional
+        LocalFileSigLevel = Optional
 
-        # إجبار باكمان على تخطي فحص التوقيعات مؤقتاً لحزم آرتكس حتى نثبت الـ keyring الخاص بآرتكس
-        sed -i '/\[system\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
-        sed -i '/\[world\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
-        sed -i '/\[galaxy\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
+        [core]
+        Include = /etc/pacman.d/mirrorlist
 
-        # الآن التحديث هيشتغل طلقة لأن باكمان هيجرب السيرفرات الرسمية واحد ورا التاني تلقائياً
+        [extra]
+        Include = /etc/pacman.d/mirrorlist
+
+        [system]
+        SigLevel = Never
+        Include = /etc/pacman.d/artix-mirrorlist
+
+        [world]
+        SigLevel = Never
+        Include = /etc/pacman.d/artix-mirrorlist
+
+        [galaxy]
+        SigLevel = Never
+        Include = /etc/pacman.d/artix-mirrorlist
+        EOF
+
+        # التحديث النهائي الشامل (هينزل طلقة دلوقتي)
         pacman -Syy --noconfirm
 
     - name: Inject V3 Flags & Setup Builder User
       run: |
-        # تفعيل الـ v3 والـ O3 العنيف في الـ Compiler للـ Container
+        # تفعيل الـ v3 والـ O3 في الـ Compiler للـ Container
         sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
         
         # إعداد مستخدم الـ builder
