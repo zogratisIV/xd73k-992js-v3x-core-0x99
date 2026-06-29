@@ -3,7 +3,7 @@ name: Ghost V3 Base Builder
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # عشان تقدر تشغله يدوي في أي وقت بالزرار
+  workflow_dispatch: 
 
 jobs:
   build-v3:
@@ -16,17 +16,20 @@ jobs:
     - name: Set up Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y arch-install-scripts binutils zstd
+        sudo apt-get install -y binutils zstd tar wget
 
-    - name: Download Artix Bootstrap
+    - name: Download Artix Bootstrap via Direct Mirror
       run: |
         mkdir -p ~/artix-chroot
-        wget https://iso.artixlinux.org/arch-bootstrap/artix-bootstrap-20240205_x86_64.tar.zst
+        # استخدام ميرور مباشر من المانيا (أسرع ومش محمي بـ كلوود فلير يقفل جيت هاب)
+        wget -U "Mozilla/5.0" https://mirror.pascalbrokmeier.de/artixlinux/iso/arch-bootstrap/artix-bootstrap-20240205_x86_64.tar.zst
         sudo tar -I zstd -xf artix-bootstrap*.tar.zst -C ~/artix-chroot
 
     - name: Inject V3 Flags & Compile Base
       run: |
+        # تفعيل الـ v3 والـ O3
         sudo sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' ~/artix-chroot/etc/makepkg.conf
+        
         sudo arch-chroot ~/artix-chroot /bin/bash -c "
           pacman-key --init
           pacman-key --populate artix
