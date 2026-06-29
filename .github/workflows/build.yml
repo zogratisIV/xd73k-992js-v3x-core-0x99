@@ -8,44 +8,45 @@ on:
 jobs:
   build-v3:
     runs-on: ubuntu-latest
+    # تشغيل الـ Job بالكامل جوه حاوية آرش رسمية عشان أدوات باكمان تكون Native 100%
+    container:
+      image: archlinux:latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Pacman & Artix Keyring
+    - name: Initialize Pacman & Add Artix Repos
       run: |
-        sudo apt-get update
-        sudo apt-get install -y pacman-package-manager arch-install-scripts binutils zstd
-        
-        # تجهيز مسار الشروت
-        sudo mkdir -p /mnt/artix
-        
-        # تحميل مفاتيح آرتكس ومستودعاتها الأساسية ديناميكياً
-        sudo mkdir -p /etc/pacman.d
-        echo 'Server = https://mirror1.artixlinux.org/changelog/$pool' | sudo tee /etc/pacman.d/mirrorlist
-        # إضافة مستودع نظام آرتكس الأساسي
-        sudo wget -qO- https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist | sudo tee /etc/pacman.d/mirrorlist
+        pacman-key --init
+        pacman-key --populate archlinux
+        pacman -Sy --noconfirm wget git base-devel
 
-    - name: Bootstrap Artix Base System
-      run: |
-        # بناء النظام الأساسي جوه المجلد من الصفر بدون تحميل ملف tar جاهز
-        sudo pacstrap -K /mnt/artix base base-devel git --noconfirm
-
-    - name: Inject V3 Flags & Compile Base
-      run: |
-        # تفعيل الـ v3 والـ O3 العنيف جوه السيستم الجديد
-        sudo sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /mnt/artix/etc/makepkg.conf
+        # إضافة مستودعات آرتكس للسيستم عشان نسحب منها الحزم الرسمية ونحولها v3
+        echo -e "\n[system]\nInclude = /etc/pacman.d/artix-mirrorlist" | suits=1 tee -a /etc/pacman.conf
+        echo -e "[world]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
         
-        # الدخول للشروت وبدء تفعيل المفاتيح
-        sudo arch-chroot /mnt/artix /bin/bash -c "
-          pacman-key --init
-          pacman-key --populate artix
-          # هنا السيستم جاهز وفُل v3 ومستني أوامر الكومبايل بتاعتك
-        "
+        # تجهيز الـ Mirrorlist الخاصة بآرتكس
+        mkdir -p /etc/pacman.d
+        wget -qO- https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist | tee /etc/pacman.d/artix-mirrorlist
+        
+        # تحديث الحزم بالمستودعات الجديدة
+        pacman -Sy --noconfirm
+
+    - name: Inject V3 Flags & Build
+      run: |
+        # تفعيل الـ v3 والـ O3 العنيف في ملف الماك بي كيج الرئيسي للـ Container
+        sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
+        
+        # عمل مجلد لتجميع الحزم الجاهزة
+        mkdir -p /workspace/packages
+        
+        # كمثال تجريبي: سحب الـ PKGBUILD بتاع أداة أساسية عشان نكمبلها v3
+        # هنا تقدر تحط الـ سكريبتات بتاعتك لبناء الـ Base
+        echo "البيئة جاهزة فُل v3 والـ Native pacman شغال"
 
     - name: Upload V3 Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: artix-v3-packages
-        path: /mnt/artix/root/packages/
+        path: /workspace/packages/
