@@ -15,28 +15,39 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Initialize Pacman & Add Artix Repos Directly
+    - name: Initialize Pacman & Add Artix Repos via Official Mirrorlist
       run: |
         pacman-key --init
         pacman-key --populate archlinux
         
-        # تثبيت الأدوات الأساسية للبناء
+        # تثبيت الأدوات الأساسية
         pacman -Sy --noconfirm wget git base-devel sudo
 
-        # حقن مستودعات آرتكس مع السيرفرات مباشرة بدون الاعتماد على ملف فرعي
-        # هنستخدم ميرور عالمي مستقر جداً ومباشر
-        echo -e "\n[system]\nServer = https://mirror.clarkson.edu/artixlinux/\$repo/os/\$arch" | tee -a /etc/pacman.conf
-        echo -e "\n[world]\nServer = https://mirror.clarkson.edu/artixlinux/\$repo/os/\$arch" | tee -a /etc/pacman.conf
-        
-        # تحديث كامل وقوي بقاعدة البيانات الجديدة
-        pacman -Sy --noconfirm
+        # تجهيز مسار الـ mirrorlist الخاص بآرتكس
+        mkdir -p /etc/pacman.d
+
+        # سحب الـ mirrorlist الرسمية من مستودع أداوت آرتكس مباشرة لضمان سيرفرات شغالة 100%
+        wget -qO /etc/pacman.d/artix-mirrorlist "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist"
+
+        # حقن المستودعات الأساسية في pacman.conf والإشارة للملف الفرعي اللي نزلناه
+        echo -e "\n[system]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
+        echo -e "\n[world]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
+        echo -e "\n[galaxy]\nInclude = /etc/pacman.d/artix-mirrorlist" | tee -a /etc/pacman.conf
+
+        # إجبار باكمان على تخطي فحص التوقيعات مؤقتاً لحزم آرتكس حتى نثبت الـ keyring الخاص بآرتكس
+        sed -i '/\[system\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
+        sed -i '/\[world\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
+        sed -i '/\[galaxy\]/,/Include/s/Include.*/Include = \/etc\/pacman.d\/artix-mirrorlist\nSigLevel = Never/' /etc/pacman.conf
+
+        # الآن التحديث هيشتغل طلقة لأن باكمان هيجرب السيرفرات الرسمية واحد ورا التاني تلقائياً
+        pacman -Syy --noconfirm
 
     - name: Inject V3 Flags & Setup Builder User
       run: |
-        # تفعيل الـ v3 والـ O3 في الـ Compiler للـ Container
+        # تفعيل الـ v3 والـ O3 العنيف في الـ Compiler للـ Container
         sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
         
-        # عمل مستخدم الـ builder وضبط الصلاحيات
+        # إعداد مستخدم الـ builder
         useradd -m builder
         echo "builder ALL=(ALL) NOPASSWD: ALL" | tee -a /etc/sudoers
         
@@ -45,7 +56,7 @@ jobs:
 
     - name: Compile Target Base Packages
       run: |
-        # هنا هيبدأ الكومبايل الـ Native الفعلي بصلاحيات الـ builder والـ v3 شغال
+        # الكومبايل الـ Native بصلاحيات الـ builder والـ v3 شغال
         sudo -u builder -i bash -c "
           cd /workspace
           git clone https://gitea.artixlinux.org/packages/artix-keyring.git
