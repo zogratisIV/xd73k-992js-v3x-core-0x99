@@ -13,31 +13,39 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Build Environment
+    - name: Set up Pacman & Artix Keyring
       run: |
         sudo apt-get update
-        sudo apt-get install -y binutils zstd tar wget
+        sudo apt-get install -y pacman-package-manager arch-install-scripts binutils zstd
+        
+        # تجهيز مسار الشروت
+        sudo mkdir -p /mnt/artix
+        
+        # تحميل مفاتيح آرتكس ومستودعاتها الأساسية ديناميكياً
+        sudo mkdir -p /etc/pacman.d
+        echo 'Server = https://mirror1.artixlinux.org/changelog/$pool' | sudo tee /etc/pacman.d/mirrorlist
+        # إضافة مستودع نظام آرتكس الأساسي
+        sudo wget -qO- https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist | sudo tee /etc/pacman.d/mirrorlist
 
-    - name: Download Artix Bootstrap via Direct Mirror
+    - name: Bootstrap Artix Base System
       run: |
-        mkdir -p ~/artix-chroot
-        # استخدام ميرور مباشر من المانيا (أسرع ومش محمي بـ كلوود فلير يقفل جيت هاب)
-        wget -U "Mozilla/5.0" https://mirror.pascalbrokmeier.de/artixlinux/iso/arch-bootstrap/artix-bootstrap-20240205_x86_64.tar.zst
-        sudo tar -I zstd -xf artix-bootstrap*.tar.zst -C ~/artix-chroot
+        # بناء النظام الأساسي جوه المجلد من الصفر بدون تحميل ملف tar جاهز
+        sudo pacstrap -K /mnt/artix base base-devel git --noconfirm
 
     - name: Inject V3 Flags & Compile Base
       run: |
-        # تفعيل الـ v3 والـ O3
-        sudo sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' ~/artix-chroot/etc/makepkg.conf
+        # تفعيل الـ v3 والـ O3 العنيف جوه السيستم الجديد
+        sudo sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /mnt/artix/etc/makepkg.conf
         
-        sudo arch-chroot ~/artix-chroot /bin/bash -c "
+        # الدخول للشروت وبدء تفعيل المفاتيح
+        sudo arch-chroot /mnt/artix /bin/bash -c "
           pacman-key --init
           pacman-key --populate artix
-          pacman -Syu --noconfirm base-devel git
+          # هنا السيستم جاهز وفُل v3 ومستني أوامر الكومبايل بتاعتك
         "
 
     - name: Upload V3 Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: artix-v3-packages
-        path: ~/artix-chroot/root/packages/
+        path: /mnt/artix/root/packages/
