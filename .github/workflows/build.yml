@@ -13,45 +13,55 @@ jobs:
 
       - name: Run Artix Build inside Docker
         run: |
-          # تشغيل حاوية أرش كقاعدة نظيفة ودعم الـ v3
-          docker run --privileged --rm -v ${{ github.workspace }}:/workspace archlinux:latest bash -c "
-            # 1. إعداد المفاتيح والمستودعات لـ Artix
+          # تشغيل حاوية أرش كقاعدة نظيفة ودعم الـ v3 مع تمرير سكريبت معزول تماماً بـ Single Quotes
+          docker run --privileged --rm -v ${{ github.workspace }}:/workspace archlinux:latest bash -c '
+            set -e
+            
+            # 1. تحديث المستودعات الأساسية للـ Arch أولاً ثم تثبيت الأدوات
+            pacman -Sy --noconfirm
             pacman-key --init && pacman-key --populate archlinux
             pacman -S --noconfirm wget sudo base-devel
 
-            # 2. حقن مستودعات Artix وضبط مؤشرات الـ v3 للـ الكومبيل
-            echo 'CFLAGS=\"-march=x86-64-v3 -O3 -pipe -fno-plt -fexceptions\"' >> /etc/makepkg.conf
-            echo 'CXXFLAGS=\"\${CFLAGS}\"' >> /etc/makepkg.conf
-            sed -i 's/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j\$(nproc)\"/' /etc/makepkg.conf
+            # 2. ضبط مؤشرات الـ v3 للـ الكومبيل
+            echo "CFLAGS=\"-march=x86-64-v3 -O3 -pipe -fno-plt -fexceptions\"" >> /etc/makepkg.conf
+            echo "CXXFLAGS=\"\${CFLAGS}\"" >> /etc/makepkg.conf
+            sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf
 
-            wget --user-agent=\"Mozilla/5.0\" https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist -O /etc/pacman.d/mirrorlist
+            # 3. سحب ملف الـ Mirrorlist بنظافة
+            wget --user-agent="Mozilla/5.0" https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist -O /etc/pacman.d/mirrorlist
             
+            # 4. حقن مستودعات Artix
             cat <<EOF >> /etc/pacman.conf
-            [artix]
-            SigLevel = PackageOptional
-            Include = /etc/pacman.d/mirrorlist
-            [system]
-            Include = /etc/pacman.d/mirrorlist
-            [world]
-            Include = /etc/pacman.d/mirrorlist
-            [galaxy]
-            Include = /etc/pacman.d/mirrorlist
-          EOF
 
-            # 3. تحديث كامل لقلب السيستم إلى Artix Runit
+[artix]
+SigLevel = PackageOptional
+Include = /etc/pacman.d/mirrorlist
+
+[system]
+Include = /etc/pacman.d/mirrorlist
+
+[world]
+Include = /etc/pacman.d/mirrorlist
+
+[galaxy]
+Include = /etc/pacman.d/mirrorlist
+EOF
+
+            # 5. التحديث الشامل وقلب السيستم إلى Artix Runit
             pacman -Syyu --noconfirm
             pacman -S --noconfirm artix-keyring artix-archlinux-support
             pacman -S --noconfirm runit artix-sysvcompat
 
-            # 4. إعادة بناء السيستم لنفسه وتجميع الملف النهائي
-            echo '=== تم تحويل البيئة بنجاح إلى Artix Runit v3 ==='
+            echo "=== تم تحويل البيئة بنجاح إلى Artix Runit v3 ==="
             
-            # هنا بنقل الملفات الناتجة للفولدر المشترك مع GitHub Runner
+            # 6. تجهيز مجلد المخرجات المشترك
             mkdir -p /workspace/output
-            cp -r /etc/pacman.d /workspace/output/
             cp /etc/pacman.conf /workspace/output/
-            # ضيف هنا أي ملفات أو حزم تانية عايز تخرجها برة الحاوية
-          "
+            cp -r /etc/pacman.d /workspace/output/
+            
+            # 7. تنظيف وتعديل الصلاحيات عشان الـ Runner الأساسي يعرف يرفع الملفات وميجبش تعارض
+            chown -R 1001:1001 /workspace/output
+          '
 
       - name: Upload Artix Build Artifacts
         uses: actions/upload-artifact@v4
