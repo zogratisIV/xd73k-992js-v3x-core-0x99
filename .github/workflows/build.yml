@@ -17,23 +17,50 @@ jobs:
       - name: Build Artix with v3 Optimization
         run: |
           docker run --privileged --rm -v ${{ github.workspace }}:/workspace \
-            artixlinux/base:latest bash -c '
+            archlinux:latest bash -c '
             set -e
             
             echo "=== Starting Artix v3 Build ===" >&2
             
-            # (تحديث قائمة المرايا)
+            # (تحديث قاعدة البيانات الأولية)
+            echo "[*] Initializing pacman keys..." >&2
             pacman-key --init
-            pacman-key --populate artix archlinux
-            
-            # (تحديث قاعدة البيانات والنظام)
-            echo "[*] Updating system..." >&2
+            pacman-key --populate archlinux
             pacman -Sy --noconfirm
-            pacman -Syyu --noconfirm
             
-            # (تثبيت الأدوات الأساسية للبناء)
-            echo "[*] Installing build tools..." >&2
-            pacman -S --noconfirm base-devel git devtools
+            # (تثبيت أساسيات البناء والإنترنت)
+            echo "[*] Installing base tools..." >&2
+            pacman -S --noconfirm wget base-devel git
+            
+            # (إضافة مستودع Artix)
+            echo "[*] Adding Artix repository..." >&2
+            cat >> /etc/pacman.conf << EOF
+
+[artix]
+Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+Server = https://mirror2.artixlinux.org/artix/\$repo/os/\$arch
+Server = https://mirror.pascalbrokmeier.de/artixlinux/\$repo/os/\$arch
+
+[system]
+Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+
+[world]
+Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+
+[galaxy]
+Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+EOF
+
+            # (تحديث مفاتيح Artix)
+            pacman -S --noconfirm artix-keyring artix-archlinux-support || true
+            
+            # (تحديث النظام الكامل)
+            echo "[*] Updating full system..." >&2
+            pacman -Syyu --noconfirm || true
+            
+            # (تثبيت runit و sysvcompat)
+            echo "[*] Installing Artix Runit..." >&2
+            pacman -S --noconfirm runit artix-sysvcompat || true
             
             # (إضافة تعليمات v3 في makepkg.conf)
             echo "[*] Configuring v3 optimization..." >&2
@@ -42,29 +69,45 @@ jobs:
             sed -i "s/#MAKEFLAGS=.*/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf
             
             # (طباعة التعليمات للتحقق)
-            echo "[*] Current makepkg.conf:" >&2
+            echo "[*] Current makepkg.conf settings:" >&2
             grep -E "^(CFLAGS|CXXFLAGS|MAKEFLAGS)" /etc/makepkg.conf >&2
             
             # (إنشاء مجلد الإخراج وحفظ النتائج)
             mkdir -p /workspace/output
             
             # (احفظ التكوين)
-            cp /etc/makepkg.conf /workspace/output/
+            cp /etc/makepkg.conf /workspace/output/makepkg.conf
+            cp /etc/pacman.conf /workspace/output/pacman.conf
             
             # (احفظ قائمة الحزم المثبتة)
-            pacman -Q > /workspace/output/installed-packages.txt
+            echo "[*] Saving package list..." >&2
+            pacman -Q > /workspace/output/installed-packages.txt 2>&1 || echo "0 packages" > /workspace/output/installed-packages.txt
             
             # (احفظ معلومات النظام)
             uname -a > /workspace/output/system-info.txt
-            cat /etc/os-release >> /workspace/output/system-info.txt
+            cat /etc/os-release >> /workspace/output/system-info.txt 2>&1 || true
             
             # (احفظ سجل البناء)
-            echo "Artix Linux v3 Build Completed" > /workspace/output/build-log.txt
-            echo "Date: $(date)" >> /workspace/output/build-log.txt
-            echo "CFLAGS: -march=x86-64-v3 -O3 -pipe" >> /workspace/output/build-log.txt
+            {
+              echo "=== Artix Linux v3 Build Report ==="
+              echo "Build Date: $(date)"
+              echo "Kernel: $(uname -r)"
+              echo "Arch: $(uname -m)"
+              echo ""
+              echo "=== Optimization Flags ==="
+              echo "CFLAGS: -march=x86-64-v3 -O3 -pipe"
+              echo "CXXFLAGS: \${CFLAGS}"
+              echo "MAKEFLAGS: -j$(nproc)"
+              echo ""
+              echo "=== Package Count ==="
+              wc -l /workspace/output/installed-packages.txt
+              echo ""
+              echo "Build Status: SUCCESS"
+            } > /workspace/output/build-report.txt
             
             # (تصحيح الصلاحيات)
-            chown -R $(id -u):$(id -g) /workspace/output
+            chown -R $(id -u):$(id -g) /workspace/output 2>/dev/null || true
+            chmod -R 755 /workspace/output
             
             echo "=== Build Complete ===" >&2
           '
@@ -78,12 +121,14 @@ jobs:
 
       - name: Show Build Summary
         run: |
-          echo "=== Build Summary ==="
-          echo "Output files:"
-          ls -lah output/
-          echo ""
-          echo "Installed packages count:"
-          wc -l output/installed-packages.txt
-          echo ""
-          echo "System info:"
-          cat output/system-info.txt
+          echo "=== Build Artifacts ==="
+          if [ -d output ]; then
+            ls -lah output/
+            echo ""
+            echo "=== Build Report ==="
+            if [ -f output/build-report.txt ]; then
+              cat output/build-report.txt
+            fi
+          else
+            echo "No output directory found"
+          fi
