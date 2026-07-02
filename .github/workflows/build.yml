@@ -29,10 +29,14 @@ jobs:
             echo "CXXFLAGS=\"\${CFLAGS}\"" >> /etc/makepkg.conf
             sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf
 
-            # 3. سحب ملف الـ Mirrorlist بنظافة
-            wget --user-agent="Mozilla/5.0" https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist -O /etc/pacman.d/mirrorlist
+            # 3. بناء ملف الـ Mirrorlist محلياً لتفادي حظر Cloudflare (403 Forbidden)
+            mkdir -p /etc/pacman.d
+            echo "Server = https://mirror.artixlinux.org/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
+            echo "Server = https://artix.juncogs.com/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
+            echo "Server = https://mirror.pascalbrokmeier.de/artixlinux/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
+            echo "Server = https://ftp.crifo.org/artix/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
             
-            # 4. حقن مستودعات Artix بأوامر echo مباشرة لتفادي مشاكل الـ YAML
+            # 4. حقن مستودعات Artix جوه pacman.conf
             echo "" >> /etc/pacman.conf
             echo "[artix]" >> /etc/pacman.conf
             echo "SigLevel = PackageOptional" >> /etc/pacman.conf
