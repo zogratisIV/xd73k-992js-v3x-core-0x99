@@ -14,29 +14,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Artix Build inside Docker
+      - name: Build Artix
         run: |
           docker run --privileged --rm -v ${{ github.workspace }}:/workspace archlinux:latest bash -c '
             set -e
             
-            # 1. تحديث المستودعات وتثبيت الأدوات الأساسية
+            echo "nameserver 8.8.8.8" > /etc/resolv.conf
+            
             pacman -Sy --noconfirm
-            pacman-key --init && pacman-key --populate archlinux
+            pacman-key --init
+            pacman-key --populate archlinux
             pacman -S --noconfirm wget sudo base-devel
 
-            # 2. ضبط مؤشرات الـ v3 للـ الكومبيل
             echo "CFLAGS=\"-march=x86-64-v3 -O3 -pipe -fno-plt -fexceptions\"" >> /etc/makepkg.conf
             echo "CXXFLAGS=\"\${CFLAGS}\"" >> /etc/makepkg.conf
             sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf
 
-            # 3. بناء ملف الـ Mirrorlist محلياً لتفادي حظر Cloudflare (403 Forbidden)
             mkdir -p /etc/pacman.d
             echo "Server = https://mirror.artixlinux.org/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
-            echo "Server = https://artix.juncogs.com/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
             echo "Server = https://mirror.pascalbrokmeier.de/artixlinux/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
-            echo "Server = https://ftp.crifo.org/artix/\$repo/os/\$arch" >> /etc/pacman.d/mirrorlist
             
-            # 4. حقن مستودعات Artix جوه pacman.conf
             echo "" >> /etc/pacman.conf
             echo "[artix]" >> /etc/pacman.conf
             echo "SigLevel = PackageOptional" >> /etc/pacman.conf
@@ -51,21 +48,17 @@ jobs:
             echo "[galaxy]" >> /etc/pacman.conf
             echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
 
-            # 5. التحديث الشامل وقلب السيستم إلى Artix Runit
             pacman -Syyu --noconfirm
             pacman -S --noconfirm artix-keyring artix-archlinux-support
             pacman -S --noconfirm runit artix-sysvcompat
 
-            echo "=== تم تحويل البيئة بنجاح إلى Artix Runit v3 ==="
-            
-            # 6. تجهيز مجلد المخرجات وتعديل الصلاحيات لليوزر 1001
             mkdir -p /workspace/output
             cp /etc/pacman.conf /workspace/output/
             cp -r /etc/pacman.d /workspace/output/
             chown -R 1001:1001 /workspace/output
           '
 
-      - name: Upload Artix Build Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artix-runit-v3-build
