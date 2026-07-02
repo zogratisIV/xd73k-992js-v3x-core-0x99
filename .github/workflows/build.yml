@@ -1,134 +1,160 @@
-name: Build Artix Runit v3
+name: Build Artix Linux ISO v3
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number'
+        required: true
+        default: '3.0.0'
+      arch:
+        description: 'Architecture'
+        required: true
+        type: choice
+        options:
+        - x86_64
+        - aarch64
+        default: 'x86_64'
+
+env:
+  IMAGE_NAME: artix-linux-v3
+  BUILD_DIR: /tmp/artix-build
 
 jobs:
-  build-artix:
+  build:
     runs-on: ubuntu-latest
-
+    container:
+      image: artixlinux/artixlinux:latest
+      options: --privileged
+    
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Artix with v3 Optimization
+      - name: Setup build environment
         run: |
-          docker run --privileged --rm -v ${{ github.workspace }}:/workspace \
-            archlinux:latest bash -c '
-            set -e
-            
-            echo "=== Starting Artix v3 Build ===" >&2
-            
-            # (تحديث قاعدة البيانات الأولية)
-            echo "[*] Initializing pacman keys..." >&2
-            pacman-key --init
-            pacman-key --populate archlinux
-            pacman -Sy --noconfirm
-            
-            # (تثبيت أساسيات البناء والإنترنت)
-            echo "[*] Installing base tools..." >&2
-            pacman -S --noconfirm wget base-devel git
-            
-            # (إضافة مستودع Artix)
-            echo "[*] Adding Artix repository..." >&2
-            cat >> /etc/pacman.conf << EOF
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            archiso \
+            git \
+            wget \
+            grub \
+            syslinux \
+            squashfs-tools \
+            libisoburn \
+            mtools \
+            dosfstools \
+            git
 
-[artix]
-Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
-Server = https://mirror2.artixlinux.org/artix/\$repo/os/\$arch
-Server = https://mirror.pascalbrokmeier.de/artixlinux/\$repo/os/\$arch
+      - name: Create custom Artix profile
+        run: |
+          mkdir -p /tmp/artix-profile
+          cp -r /usr/share/archiso/configs/releng/* /tmp/artix-profile/
+          
+          # تعديل الملفات حسب احتياجاتك v3
+          cat > /tmp/artix-profile/packages.x86_64 << 'EOF'
+          # Base packages
+          base
+          base-devel
+          linux
+          linux-firmware
+          # Artix specific
+          artix-mirrorlist
+          openrc
+          # Custom packages for v3
+          vim
+          nano
+          networkmanager
+          networkmanager-openrc
+          openssh
+          git
+          wget
+          curl
+          # Your custom packages here
+          EOF
 
-[system]
-Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+          # تخصيص إعدادات النظام
+          mkdir -p /tmp/artix-profile/airootfs/root
+          cat > /tmp/artix-profile/airootfs/root/custom_setup.sh << 'EOF'
+          #!/bin/bash
+          echo "Artix Linux v3 Setup"
+          # إعداداتك المخصصة هنا
+          EOF
+          chmod +x /tmp/artix-profile/airootfs/root/custom_setup.sh
 
-[world]
-Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
+      - name: Build ISO
+        run: |
+          cd /tmp/artix-profile
+          mkarchiso -v -w /tmp/archiso-tmp -o /github/workspace/output .
+          
+      - name: Prepare ISO info
+        id: iso_info
+        run: |
+          ISO_PATH=$(find /github/workspace/output -name "*.iso" | head -n 1)
+          echo "iso_path=$ISO_PATH" >> $GITHUB_OUTPUT
+          ISO_NAME=$(basename "$ISO_PATH")
+          echo "iso_name=$ISO_NAME" >> $GITHUB_OUTPUT
+          ISO_SIZE=$(du -h "$ISO_PATH" | cut -f1)
+          echo "iso_size=$ISO_SIZE" >> $GITHUB_OUTPUT
+          
+          # Create checksums
+          sha256sum "$ISO_PATH" > "${ISO_PATH}.sha256"
+          md5sum "$ISO_PATH" > "${ISO_PATH}.md5"
 
-[galaxy]
-Server = https://mirror1.artixlinux.org/artix/\$repo/os/\$arch
-EOF
+      - name: Set version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=${{ github.event.inputs.version || '3.0.0-dev' }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-            # (تحديث مفاتيح Artix)
-            pacman -S --noconfirm artix-keyring artix-archlinux-support || true
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Artix Linux v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name || steps.version.outputs.version }}
+          body: |
+            ## Artix Linux v${{ steps.version.outputs.version }}
             
-            # (تحديث النظام الكامل)
-            echo "[*] Updating full system..." >&2
-            pacman -Syyu --noconfirm || true
+            Build Date: ${{ github.event.repository.updated_at }}
             
-            # (تثبيت runit و sysvcompat)
-            echo "[*] Installing Artix Runit..." >&2
-            pacman -S --noconfirm runit artix-sysvcompat || true
+            ### File Details:
+            - **ISO**: ${{ steps.iso_info.outputs.iso_name }}
+            - **Size**: ${{ steps.iso_info.outputs.iso_size }}
+            - **Architecture**: ${{ github.event.inputs.arch || 'x86_64' }}
             
-            # (إضافة تعليمات v3 في makepkg.conf)
-            echo "[*] Configuring v3 optimization..." >&2
-            sed -i "s/^CFLAGS=.*/CFLAGS=\"-march=x86-64-v3 -O3 -pipe\"/" /etc/makepkg.conf
-            sed -i "s/^CXXFLAGS=.*/CXXFLAGS=\"\${CFLAGS}\"/" /etc/makepkg.conf
-            sed -i "s/#MAKEFLAGS=.*/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf
+            ### Checksums:
+            SHA256: See attached file
+            MD5: See attached file
             
-            # (طباعة التعليمات للتحقق)
-            echo "[*] Current makepkg.conf settings:" >&2
-            grep -E "^(CFLAGS|CXXFLAGS|MAKEFLAGS)" /etc/makepkg.conf >&2
+            ### Installation:
+            1. Download the ISO
+            2. Write to USB using `dd` or Etcher
+            3. Boot and follow installation instructions
             
-            # (إنشاء مجلد الإخراج وحفظ النتائج)
-            mkdir -p /workspace/output
-            
-            # (احفظ التكوين)
-            cp /etc/makepkg.conf /workspace/output/makepkg.conf
-            cp /etc/pacman.conf /workspace/output/pacman.conf
-            
-            # (احفظ قائمة الحزم المثبتة)
-            echo "[*] Saving package list..." >&2
-            pacman -Q > /workspace/output/installed-packages.txt 2>&1 || echo "0 packages" > /workspace/output/installed-packages.txt
-            
-            # (احفظ معلومات النظام)
-            uname -a > /workspace/output/system-info.txt
-            cat /etc/os-release >> /workspace/output/system-info.txt 2>&1 || true
-            
-            # (احفظ سجل البناء)
-            {
-              echo "=== Artix Linux v3 Build Report ==="
-              echo "Build Date: $(date)"
-              echo "Kernel: $(uname -r)"
-              echo "Arch: $(uname -m)"
-              echo ""
-              echo "=== Optimization Flags ==="
-              echo "CFLAGS: -march=x86-64-v3 -O3 -pipe"
-              echo "CXXFLAGS: \${CFLAGS}"
-              echo "MAKEFLAGS: -j$(nproc)"
-              echo ""
-              echo "=== Package Count ==="
-              wc -l /workspace/output/installed-packages.txt
-              echo ""
-              echo "Build Status: SUCCESS"
-            } > /workspace/output/build-report.txt
-            
-            # (تصحيح الصلاحيات)
-            chown -R $(id -u):$(id -g) /workspace/output 2>/dev/null || true
-            chmod -R 755 /workspace/output
-            
-            echo "=== Build Complete ===" >&2
-          '
+            Built using GitHub Actions
+          files: |
+            ${{ steps.iso_info.outputs.iso_path }}
+            ${{ steps.iso_info.outputs.iso_path }}.sha256
+            ${{ steps.iso_info.outputs.iso_path }}.md5
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Upload Artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artix-runit-v3-build
-          path: output/
+          name: artix-iso-${{ steps.version.outputs.version }}
+          path: |
+            output/*.iso
+            output/*.sha256
+            output/*.md5
           retention-days: 30
-
-      - name: Show Build Summary
-        run: |
-          echo "=== Build Artifacts ==="
-          if [ -d output ]; then
-            ls -lah output/
-            echo ""
-            echo "=== Build Report ==="
-            if [ -f output/build-report.txt ]; then
-              cat output/build-report.txt
-            fi
-          else
-            echo "No output directory found"
-          fi
