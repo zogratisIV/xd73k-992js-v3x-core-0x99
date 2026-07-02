@@ -1,93 +1,60 @@
-name: Ghost V3 Base Builder
+name: Build Artix Runit v3
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch: 
+  workflow_dispatch: # تشغيل يدوي بضغطة زرار
 
 jobs:
-  build-v3:
+  build-artix:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Bypass Broken Container Hooks & Setup Config
-      run: |
-        # حل مشكلة الـ tmpfiles عشان الـ hooks متموتش الـ job في التحديث
-        mkdir -p /etc/tmpfiles.d
-        echo "d /run/initramfs 0755 root root -" > /etc/tmpfiles.d/fix.conf
-        ln -sf /dev/null /usr/lib/tmpfiles.d/journal-nocow.conf
+      - name: Run Artix Build inside Docker
+        run: |
+          # تشغيل حاوية أرش كقاعدة نظيفة ودعم الـ v3
+          docker run --privileged --rm -v ${{ github.workspace }}:/workspace archlinux:latest bash -c "
+            # 1. إعداد المفاتيح والمستودعات لـ Artix
+            pacman-key --init && pacman-key --populate archlinux
+            pacman -S --noconfirm wget sudo base-devel
 
-        pacman-key --init
-        pacman-key --populate archlinux
+            # 2. حقن مستودعات Artix وضبط مؤشرات الـ v3 للـ الكومبيل
+            echo 'CFLAGS=\"-march=x86-64-v3 -O3 -pipe -fno-plt -fexceptions\"' >> /etc/makepkg.conf
+            echo 'CXXFLAGS=\"\${CFLAGS}\"' >> /etc/makepkg.conf
+            sed -i 's/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j\$(nproc)\"/' /etc/makepkg.conf
 
-        # إنشاء المجلدات وسحب الميرور باستخدام curl المتاح في الحاوية
-        mkdir -p /etc/pacman.d
-        curl -sL "https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist" -o /etc/pacman.d/artix-mirrorlist
+            wget --user-agent=\"Mozilla/5.0\" https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist -O /etc/pacman.d/mirrorlist
+            
+            cat <<EOF >> /etc/pacman.conf
+            [artix]
+            SigLevel = PackageOptional
+            Include = /etc/pacman.d/mirrorlist
+            [system]
+            Include = /etc/pacman.d/mirrorlist
+            [world]
+            Include = /etc/pacman.d/mirrorlist
+            [galaxy]
+            Include = /etc/pacman.d/mirrorlist
+          EOF
 
-        # كتابة الـ Config النضيف
-        cat << 'EOF' > /etc/pacman.conf
-        [options]
-        HoldPkg     = pacman glibc
-        Architecture = auto
-        Color
-        CheckSpace
-        ParallelDownloads = 5
-        SigLevel    = Required DatabaseOptional
-        LocalFileSigLevel = Optional
+            # 3. تحديث كامل لقلب السيستم إلى Artix Runit
+            pacman -Syyu --noconfirm
+            pacman -S --noconfirm artix-keyring artix-archlinux-support
+            pacman -S --noconfirm runit artix-sysvcompat
 
-        [core]
-        Include = /etc/pacman.d/mirrorlist
+            # 4. إعادة بناء السيستم لنفسه وتجميع الملف النهائي
+            echo '=== تم تحويل البيئة بنجاح إلى Artix Runit v3 ==='
+            
+            # هنا بنقل الملفات الناتجة للفولدر المشترك مع GitHub Runner
+            mkdir -p /workspace/output
+            cp -r /etc/pacman.d /workspace/output/
+            cp /etc/pacman.conf /workspace/output/
+            # ضيف هنا أي ملفات أو حزم تانية عايز تخرجها برة الحاوية
+          "
 
-        [extra]
-        Include = /etc/pacman.d/mirrorlist
-
-        [system]
-        SigLevel = Never
-        Include = /etc/pacman.d/artix-mirrorlist
-
-        [world]
-        SigLevel = Never
-        Include = /etc/pacman.d/artix-mirrorlist
-
-        [galaxy]
-        SigLevel = Never
-        Include = /etc/pacman.d/artix-mirrorlist
-        EOF
-
-    - name: Install Base Requirements
-      run: |
-        # تحديث وتثبيت الأدوات الأساسية مع تجاهل الـ hook الخربان لو رمى كود خطأ
-        pacman -Sy --noconfirm git base-devel sudo || true
-        pacman -Syy --noconfirm
-
-    - name: Inject V3 Flags & Setup Builder User
-      run: |
-        # حقن حزم الـ v3 والـ O3 للكومبايلر
-        sed -i 's/-march=x86-64 -mtune=generic/-march=x86-64-v3 -O3 -pipe/g' /etc/makepkg.conf
-        
-        useradd -m builder
-        echo "builder ALL=(ALL) NOPASSWD: ALL" | tee -a /etc/sudoers
-        
-        mkdir -p /workspace/packages
-        chown -R builder:builder /workspace
-
-    - name: Compile Target Base Packages
-      run: |
-        sudo -u builder -i bash -c "
-          cd /workspace
-          git clone https://gitea.artixlinux.org/packages/artix-keyring.git
-          cd artix-keyring
-          makepkg -sc --noconfirm
-          cp *.pkg.tar.zst /workspace/packages/ 2>/dev/null || true
-        "
-
-    - name: Upload V3 Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: artix-v3-packages
-        path: /workspace/packages/
+      - name: Upload Artix Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artix-runit-v3-build
+          path: output/
