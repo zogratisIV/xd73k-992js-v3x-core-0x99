@@ -1,7 +1,10 @@
 name: Build Artix Runit v3
 
 on:
-  workflow_dispatch: # تشغيل يدوي بضغطة زرار
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build-artix:
@@ -13,11 +16,10 @@ jobs:
 
       - name: Run Artix Build inside Docker
         run: |
-          # تشغيل حاوية أرش كقاعدة نظيفة ودعم الـ v3 مع تمرير سكريبت معزول تماماً بـ Single Quotes
           docker run --privileged --rm -v ${{ github.workspace }}:/workspace archlinux:latest bash -c '
             set -e
             
-            # 1. تحديث المستودعات الأساسية للـ Arch أولاً ثم تثبيت الأدوات
+            # 1. تحديث المستودعات وتثبيت الأدوات الأساسية
             pacman -Sy --noconfirm
             pacman-key --init && pacman-key --populate archlinux
             pacman -S --noconfirm wget sudo base-devel
@@ -30,22 +32,20 @@ jobs:
             # 3. سحب ملف الـ Mirrorlist بنظافة
             wget --user-agent="Mozilla/5.0" https://gitea.artixlinux.org/packages/artix-mirrorlist/raw/branch/master/mirrorlist -O /etc/pacman.d/mirrorlist
             
-            # 4. حقن مستودعات Artix
-            cat <<EOF >> /etc/pacman.conf
-
-[artix]
-SigLevel = PackageOptional
-Include = /etc/pacman.d/mirrorlist
-
-[system]
-Include = /etc/pacman.d/mirrorlist
-
-[world]
-Include = /etc/pacman.d/mirrorlist
-
-[galaxy]
-Include = /etc/pacman.d/mirrorlist
-EOF
+            # 4. حقن مستودعات Artix بأوامر echo مباشرة لتفادي مشاكل الـ YAML
+            echo "" >> /etc/pacman.conf
+            echo "[artix]" >> /etc/pacman.conf
+            echo "SigLevel = PackageOptional" >> /etc/pacman.conf
+            echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+            
+            echo "[system]" >> /etc/pacman.conf
+            echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+            
+            echo "[world]" >> /etc/pacman.conf
+            echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+            
+            echo "[galaxy]" >> /etc/pacman.conf
+            echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
 
             # 5. التحديث الشامل وقلب السيستم إلى Artix Runit
             pacman -Syyu --noconfirm
@@ -54,12 +54,10 @@ EOF
 
             echo "=== تم تحويل البيئة بنجاح إلى Artix Runit v3 ==="
             
-            # 6. تجهيز مجلد المخرجات المشترك
+            # 6. تجهيز مجلد المخرجات وتعديل الصلاحيات لليوزر 1001
             mkdir -p /workspace/output
             cp /etc/pacman.conf /workspace/output/
             cp -r /etc/pacman.d /workspace/output/
-            
-            # 7. تنظيف وتعديل الصلاحيات عشان الـ Runner الأساسي يعرف يرفع الملفات وميجبش تعارض
             chown -R 1001:1001 /workspace/output
           '
 
