@@ -1,7 +1,7 @@
 name: Interactive SSH Terminal
 
 on:
-  workflow_dispatch: # ده بيخليك تشغل الـ Action يدويًا بضغطة زرار من موقع جيت هب
+  workflow_dispatch:
 
 jobs:
   ssh-session:
@@ -11,7 +11,15 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Start SSH Session via Tmate
+      - name: Setup Tmate SSH
         uses: mxschmitt/action-tmate@v3
         with:
-          detached: false # عشان يفضل السيرفر مستنيك وما يقفلش لغاية ما تخلص بنفسك
+          detached: true # بيشغل الجلسة في الخلفية وطبع البيانات مباشرة
+
+      - name: Keep Alive & Wait
+        run: |
+          echo "=========================================="
+          echo "SSH Session Details:"
+          cat /tmp/tmate.sock 2>/dev/null || true
+          echo "=========================================="
+          sleep 21600 # يفضل شغال 6 ساعات
