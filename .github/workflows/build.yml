@@ -8,18 +8,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Tmate SSH
-        uses: mxschmitt/action-tmate@v3
+      - name: Setup Upterm Session
+        uses: owenthereal/action-upterm@v1
         with:
-          detached: true # بيشغل الجلسة في الخلفية وطبع البيانات مباشرة
-
-      - name: Keep Alive & Wait
-        run: |
-          echo "=========================================="
-          echo "SSH Session Details:"
-          cat /tmp/tmate.sock 2>/dev/null || true
-          echo "=========================================="
-          sleep 21600 # يفضل شغال 6 ساعات
+          limit-access-to-actor: false
