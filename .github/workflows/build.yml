@@ -6,12 +6,19 @@ on:
 jobs:
   ssh-session:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Upterm Session
-        uses: owenthereal/action-upterm@v1
-        with:
-          limit-access-to-actor: false
+      - name: Setup SSH via Tmate CLI
+        run: |
+          sudo apt-get update && sudo apt-get install -y tmate
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          echo "=================================================="
+          echo "SSH Command:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+          echo "Web Shell URL:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
+          echo "=================================================="
+          sleep 21600 # يفضل شغال 6 ساعات
