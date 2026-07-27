@@ -10,15 +10,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH via Tmate CLI
+      - name: Setup Tmate & Print to Summary
         run: |
           sudo apt-get update && sudo apt-get install -y tmate
           tmate -S /tmp/tmate.sock new-session -d
           tmate -S /tmp/tmate.sock wait tmate-ready
-          echo "=================================================="
-          echo "SSH Command:"
-          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
-          echo "Web Shell URL:"
-          tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
-          echo "=================================================="
-          sleep 21600 # يفضل شغال 6 ساعات
+          
+          # استخراج الروابط
+          SSH_CMD=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
+          WEB_URL=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
+          
+          # طباعة الروابط مباشرة في صفحة الـ Summary الرئيسية!
+          echo "## 🚀 Your SSH Terminal is Ready!" >> $GITHUB_STEP_SUMMARY
+          echo "**SSH Command:** \`$SSH_CMD\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Web Terminal:** [Click Here to Open]($WEB_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "Web Link direct: \`$WEB_URL\`" >> $GITHUB_STEP_SUMMARY
+
+          # الانتظار لمدة 6 ساعات
+          sleep 21600
