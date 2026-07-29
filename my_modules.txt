@@ -1,0 +1,131 @@
+Module                  Size  Used by
+nft_fib_ipv4           12288  1
+nft_ct                 32768  4
+nft_fib_ipv6           12288  1
+nft_fib                12288  2 nft_fib_ipv6,nft_fib_ipv4
+snd_seq_dummy          12288  0
+snd_hrtimer            12288  1
+snd_seq               147456  7 snd_seq_dummy
+xt_MASQUERADE          16384  1
+bridge                483328  0
+stp                    12288  1 bridge
+llc                    16384  2 bridge,stp
+xfrm_user              77824  1
+xfrm_algo              16384  1 xfrm_user
+xt_set                 24576  0
+ip_set                 69632  1 xt_set
+nft_chain_nat          12288  5
+nf_nat                 69632  2 nft_chain_nat,xt_MASQUERADE
+overlay               270336  0
+wireguard             122880  0
+libcurve25519          94208  1 wireguard
+ip6_udp_tunnel         16384  1 wireguard
+udp_tunnel             36864  1 wireguard
+vfat                   28672  1
+fat                   118784  1 vfat
+intel_rapl_msr         24576  0
+intel_rapl_common      57344  1 intel_rapl_msr
+x86_pkg_temp_thermal    16384  0
+intel_powerclamp       24576  0
+coretemp               24576  0
+snd_usb_audio         667648  0
+at24                   28672  0
+kvm_intel             536576  0
+snd_usbmidi_lib        57344  1 snd_usb_audio
+snd_ump                45056  1 snd_usb_audio
+snd_rawmidi            57344  2 snd_usbmidi_lib,snd_ump
+mei_pxp                20480  0
+mei_hdcp               28672  0
+mei_wdt                16384  0
+snd_hda_codec_alc269   159744  1
+mousedev               28672  0
+snd_seq_device         16384  3 snd_seq,snd_ump,snd_rawmidi
+mc                    110592  1 snd_usb_audio
+kvm                  1613824  1 kvm_intel
+snd_hda_codec_realtek_lib    73728  1 snd_hda_codec_alc269
+irqbypass              16384  1 kvm
+snd_hda_scodec_component    20480  1 snd_hda_codec_alc269
+firmware_attributes_class    12288  0
+aesni_intel           110592  0
+snd_hda_codec_generic   131072  2 snd_hda_codec_realtek_lib,snd_hda_codec_alc269
+snd_hda_codec_intelhdmi    28672  1
+gf128mul               12288  1 aesni_intel
+aead                   16384  2 xfrm_algo,aesni_intel
+snd_hda_codec_hdmi     65536  1 snd_hda_codec_intelhdmi
+rapl                   20480  0
+hp_wmi                 53248  0
+intel_cstate           20480  0
+snd_hda_intel          73728  4
+intel_uncore          294912  0
+sparse_keymap          12288  1 hp_wmi
+i2c_i801               40960  0
+snd_hda_codec         241664  6 snd_hda_codec_generic,snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec_realtek_lib,snd_hda_codec_alc269,snd_hda_codec_intelhdmi
+wmi_bmof               12288  0
+rfkill                 45056  3 hp_wmi
+i2c_smbus              20480  1 i2c_i801
+i2c_mux                20480  1 i2c_i801
+psmouse               262144  0
+pcspkr                 12288  0
+snd_hda_core          159744  7 snd_hda_codec_generic,snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hda_codec_realtek_lib,snd_hda_codec_alc269,snd_hda_codec_intelhdmi
+spi_nor               204800  0
+mtd                   126976  3 spi_nor
+snd_intel_dspcfg       49152  1 snd_hda_intel
+snd_intel_sdw_acpi     16384  1 snd_intel_dspcfg
+snd_hwdep              24576  2 snd_usb_audio,snd_hda_codec
+e1000e                413696  0
+intel_oc_wdt           12288  1
+snd_pcm               253952  6 snd_hda_codec_hdmi,snd_hda_intel,snd_usb_audio,snd_hda_codec,snd_hda_core
+ptp                    61440  1 e1000e
+tpm_infineon           20480  0
+pps_core               32768  1 ptp
+snd_timer              61440  3 snd_seq,snd_hrtimer,snd_pcm
+snd                   172032  24 snd_hda_codec_generic,snd_seq,snd_seq_device,snd_hda_codec_hdmi,snd_hwdep,snd_hda_intel,snd_usb_audio,snd_usbmidi_lib,snd_hda_codec,snd_timer,snd_hda_codec_realtek_lib,snd_hda_codec_alc269,snd_ump,snd_pcm,snd_rawmidi
+mei_me                 65536  3
+soundcore              16384  1 snd
+mei                   221184  7 mei_wdt,mei_hdcp,mei_pxp,mei_me
+cdc_acm                53248  0
+mac_hid                12288  0
+ip6t_REJECT            12288  1
+nf_reject_ipv6         20480  1 ip6t_REJECT
+xt_hl                  12288  22
+ip6t_rt                16384  3
+ipt_REJECT             12288  1
+nf_reject_ipv4         16384  1 ipt_REJECT
+xt_LOG                 16384  10
+nf_log_syslog          20480  10
+nft_limit              20480  13
+xt_limit               12288  0
+xt_addrtype            12288  8
+xt_tcpudp              20480  60
+xt_conntrack           12288  17
+nf_conntrack          217088  4 xt_conntrack,nf_nat,nft_ct,xt_MASQUERADE
+nf_defrag_ipv6         24576  1 nf_conntrack
+nf_defrag_ipv4         12288  1 nf_conntrack
+nft_compat             24576  123
+x_tables               77824  12 xt_conntrack,nft_compat,xt_LOG,xt_tcpudp,xt_addrtype,ip6t_rt,xt_set,ipt_REJECT,xt_limit,xt_hl,xt_MASQUERADE,ip6t_REJECT
+nf_tables             430080  710 nft_ct,nft_compat,nft_fib_ipv6,nft_fib_ipv4,nft_chain_nat,nft_limit,nft_fib
+nfnetlink              20480  4 nft_compat,nf_tables,ip_set
+dm_mod                245760  0
+crypto_user            16384  0
+pkcs8_key_parser       12288  0
+uinput                 28672  0
+ntsync                 24576  0
+zram                   73728  1
+842_decompress         20480  1 zram
+842_compress           24576  1 zram
+f2fs                 1167360  1
+lz4hc_compress         20480  2 zram,f2fs
+lz4_compress           24576  2 zram,f2fs
+i915                 5378048  160
+spi_intel_platform     12288  0
+spi_intel              40960  1 spi_intel_platform
+drm_buddy              12288  1 i915
+i2c_algo_bit           24576  1 i915
+serio_raw              20480  0
+ttm                   159744  1 i915
+intel_gtt              32768  1 i915
+video                  81920  1 i915
+drm_display_helper    327680  1 i915
+cec                   118784  2 drm_display_helper,i915
+lpc_ich                28672  0
+wmi                    40960  3 hp_wmi,video,wmi_bmof
