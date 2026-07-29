@@ -32,18 +32,10 @@ jobs:
           mkdir -p "$WORKDIR"
           git clone --depth 1 "$TKG_REPO" "$WORKDIR/linux-tkg"
 
-      - name: Prepare Config & Logs Directory
+      - name: Clean customization configs (Force Interactive Prompts)
         run: |
           cd "$WORKDIR/linux-tkg"
-          # إنشاء فولدر اللوجات لمنع خطأ النظام
-          mkdir -p logs
-          # إعداد ملف التهيئة مع تفريغ القيم لجبر السكربت على السؤال التفاعلي
-          if [ -f "customization.cfg.default" ]; then
-            cp customization.cfg.default customization.cfg
-            # تفريغ متغير النسخة والمجدول لضمان بدء الأسئلة التفاعلية
-            sed -i 's/^_version=.*/_version=""/' customization.cfg
-            sed -i 's/^_cpusched=.*/_cpusched=""/' customization.cfg
-          fi
+          rm -f customization.cfg
 
       - name: Inject Modules list for localmodconfig
         run: |
@@ -52,7 +44,7 @@ jobs:
             cp "${{ github.workspace }}/my_modules.txt" ./lsmod.txt
           fi
 
-      - name: Run linux-tkg via Expect (Numbered Answers + eevdf)
+      - name: Run linux-tkg via Expect (Numbered Answers + Live Logs)
         run: |
           cd "$WORKDIR/linux-tkg"
           chmod +x install.sh
@@ -73,7 +65,7 @@ jobs:
               "Do you want to use make menuconfig" { send "0\r"; exp_continue }
               eof
             }
-          ' > "$LOGFILE" 2>&1 || true
+          ' | tee "$LOGFILE"
 
       - name: Upload Logs & Artifacts
         if: always()
