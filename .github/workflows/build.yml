@@ -37,7 +37,7 @@ jobs:
           cd "$WORKDIR/linux-tkg"
           cat > customization.cfg <<'CFG'
           _distro="Generic"
-          _version="7.1.5"
+          _version="1"
           _cpusched="eevdf"
           _compiler="llvm"
           _use_thinlto="true"
