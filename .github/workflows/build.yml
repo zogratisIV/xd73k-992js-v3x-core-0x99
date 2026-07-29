@@ -1,31 +1,79 @@
-name: Interactive SSH Terminal
+name: CI - linux-tkg build (Generic)
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
 
 jobs:
-  ssh-session:
+  build:
+    name: Build Linux-TKG (Generic)
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      TKG_REPO: https://github.com/Frogging-Family/linux-tkg.git
+      WORKDIR: ${{ github.workspace }}/tkg-build
+      LOGFILE: ${{ github.workspace }}/tkg-build/build.log
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Tmate & Print to Summary
-        run: |
-          sudo apt-get update && sudo apt-get install -y tmate
-          tmate -S /tmp/tmate.sock new-session -d
-          tmate -S /tmp/tmate.sock wait tmate-ready
-          
-          # استخراج الروابط
-          SSH_CMD=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
-          WEB_URL=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
-          
-          # طباعة الروابط مباشرة في صفحة الـ Summary الرئيسية!
-          echo "## 🚀 Your SSH Terminal is Ready!" >> $GITHUB_STEP_SUMMARY
-          echo "**SSH Command:** \`$SSH_CMD\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Web Terminal:** [Click Here to Open]($WEB_URL)" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "Web Link direct: \`$WEB_URL\`" >> $GITHUB_STEP_SUMMARY
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
 
-          # الانتظار لمدة 6 ساعات
-          sleep 21600
+      - name: Install APT dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang llvm lld build-essential git curl pkg-config libssl-dev bc ccache libelf-dev expect fakeroot dpkg-dev zstd libncurses-dev flex bison libudev-dev libpci-dev libiberty-dev
+
+      - name: Prepare workspace & Clone linux-tkg
+        run: |
+          mkdir -p "$WORKDIR"
+          git clone --depth 1 "$TKG_REPO" "$WORKDIR/linux-tkg"
+
+      - name: Apply customization.cfg & Preseed Answers
+        run: |
+          cd "$WORKDIR/linux-tkg"
+          cat > customization.cfg <<'CFG'
+          _distro="Generic"
+          _version="7.1.5"
+          _cpusched="eevdf"
+          _compiler="llvm"
+          _use_thinlto="true"
+          _hz="1000"
+          _tickless="idle"
+          _processor_opt="x86-64-v3"
+          _acs_override="false"
+          _configtype="localmodconfig"
+          CFG
+
+      - name: Inject Modules list for localmodconfig
+        run: |
+          cd "$WORKDIR/linux-tkg"
+          if [ -f "${{ github.workspace }}/my_modules.txt" ]; then
+            cp "${{ github.workspace }}/my_modules.txt" ./lsmod.txt
+          fi
+
+      - name: Run linux-tkg build (Non-Interactive Auto Pass)
+        run: |
+          cd "$WORKDIR/linux-tkg"
+          chmod +x install.sh
+          # تمرير الإجابات تلقائياً لمنع تعليق الترمينال
+          (printf "5\n1\n\n1\n2\n\n5\n2\nn\n0\n") | ./install.sh install > "$LOGFILE" 2>&1 || true
+
+      - name: Upload Logs & Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tkg-build-artifacts
+          path: |
+            ${{ env.LOGFILE }}
+            ${{ github.workspace }}/tkg-build/linux-tkg/*.pkg.tar.zst
+            ${{ github.workspace }}/tkg-build/linux-tkg/*.deb
+
+      - name: Show tail of log
+        if: always()
+        run: |
+          echo "=== Build log tail ==="
+          tail -n 200 "$LOGFILE" || true
