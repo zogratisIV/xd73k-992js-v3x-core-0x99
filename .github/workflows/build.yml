@@ -1,4 +1,4 @@
-name: CI - linux-tkg build (Generic)
+name: CI - linux-tkg build (Interactive Prompt)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build Linux-TKG (Generic)
+    name: Build Linux-TKG
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -32,21 +32,10 @@ jobs:
           mkdir -p "$WORKDIR"
           git clone --depth 1 "$TKG_REPO" "$WORKDIR/linux-tkg"
 
-      - name: Apply customization.cfg & Preseed Answers
+      - name: Clean customization configs (Force Interactive Prompts)
         run: |
           cd "$WORKDIR/linux-tkg"
-          cat > customization.cfg <<'CFG'
-          _distro="Generic"
-          _version="1"
-          _cpusched="eevdf"
-          _compiler="llvm"
-          _use_thinlto="true"
-          _hz="1000"
-          _tickless="idle"
-          _processor_opt="x86-64-v3"
-          _acs_override="false"
-          _configtype="localmodconfig"
-          CFG
+          rm -f customization.cfg
 
       - name: Inject Modules list for localmodconfig
         run: |
@@ -55,12 +44,28 @@ jobs:
             cp "${{ github.workspace }}/my_modules.txt" ./lsmod.txt
           fi
 
-      - name: Run linux-tkg build (Non-Interactive Auto Pass)
+      - name: Run linux-tkg via Expect (Numbered Answers)
         run: |
           cd "$WORKDIR/linux-tkg"
           chmod +x install.sh
-          # تمرير الإجابات تلقائياً لمنع تعليق الترمينال
-          (printf "5\n1\n\n1\n2\n\n5\n2\nn\n0\n") | ./install.sh install > "$LOGFILE" 2>&1 || true
+          
+          expect -c '
+            set timeout -1
+            spawn ./install.sh install
+            expect {
+              "Which linux distribution" { send "5\r"; exp_continue }
+              "Which kernel version" { send "1\r"; exp_continue }
+              "Which CPU sched variant" { send "eevdf\r"; exp_continue }
+              "Which compiler" { send "1\r"; exp_continue }
+              "enable Clang Link Time Optimizations" { send "2\r"; exp_continue }
+              "desired CPU micro-architecture" { send "x86-64-v3\r"; exp_continue }
+              "kernel interrupt timer frequency" { send "5\r"; exp_continue }
+              "Use CattaRappa mode" { send "2\r"; exp_continue }
+              "Use ACS override patch" { send "n\r"; exp_continue }
+              "Do you want to use make menuconfig" { send "0\r"; exp_continue }
+              eof
+            }
+          ' > "$LOGFILE" 2>&1 || true
 
       - name: Upload Logs & Artifacts
         if: always()
